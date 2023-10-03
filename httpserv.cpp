@@ -1,3 +1,5 @@
+#ifndef _NYSY_HTTP_SERVER_
+#define _NYSY_HTTP_SERVER_
 #include "nysytcplib.hpp"
 #include <iostream>
 #include <thread>
@@ -10,6 +12,14 @@
 #include <memory>
 #include <list>
 #include "nysythreadpool.hpp"
+
+/*
+*Usage:
+*1, Place index.html in the root directory, as well as other files and folders
+*2, Specify the port, listen backlog and number of threads in the HTTPServer constructor
+*3, call the member fucnction start()
+*4, all set!
+*/
 
 namespace nysy {
 	class Request {
@@ -73,31 +83,6 @@ namespace nysy {
 		std::list<std::thread> m_thread_list;
 		nysy::ConnectionStatus m_status;
 		nysy::ThreadPool m_thread_pool;
-	public:
-		HTTPServer(unsigned short port = 8080,int backlog = 128,size_t thread_count = std::thread::hardware_concurrency())
-			:m_server(), m_conn_vec(), m_thread_list(), m_thread_pool(thread_count) {
-#ifdef _WIN64
-			if (!is_wsa_startuped) {
-				WSAData data;
-				if (::WSAStartup(MAKEWORD(2, 2), &data) == WSASYSNOTREADY) { 
-					m_status = nysy::ConnectionStatus::SystemError;
-					return;
-				}
-				is_wsa_startuped = true;
-			}
-#endif//_WIN64
-
-			m_status = m_server.init(port);
-			if (m_status == nysy::ConnectionStatus::SystemError)return;
-			listen(backlog);
-		}
-
-		nysy::ConnectionStatus get_status() { return m_status; }
-
-		void listen(int backlog = 128) {
-			if (m_status == nysy::ConnectionStatus::SystemError)return;
-			m_status = m_server.listen(backlog);
-		}
 
 		void read_file(const std::string& file_name, std::string& buffer) {
 			std::fstream fs{file_name, std::ios::binary | std::ios::in };
@@ -117,7 +102,33 @@ namespace nysy {
 			m_status = nysy::ConnectionStatus::Success;
 		}
 
-		void serve_client(nysy::Connection connection,sockaddr_in client_addr) {
+	public:
+		HTTPServer(unsigned short port = 8080, int backlog = 128, size_t thread_count = std::thread::hardware_concurrency())
+			:m_server(), m_conn_vec(), m_thread_list(), m_thread_pool(thread_count) {
+#ifdef _WIN64
+			if (!is_wsa_startuped) {
+				WSAData data;
+				if (::WSAStartup(MAKEWORD(2, 2), &data) == WSASYSNOTREADY) {
+					m_status = nysy::ConnectionStatus::SystemError;
+					return;
+				}
+				is_wsa_startuped = true;
+			}
+#endif//_WIN64
+
+			m_status = m_server.init(port);
+			if (m_status == nysy::ConnectionStatus::SystemError)return;
+			listen(backlog);
+		}
+
+		nysy::ConnectionStatus get_status() { return m_status; }
+
+		void listen(int backlog = 128) {
+			if (m_status == nysy::ConnectionStatus::SystemError)return;
+			m_status = m_server.listen(backlog);
+		}
+
+		void serve_client(nysy::Connection connection, sockaddr_in client_addr) {
 			Request request;
 			std::string req_buffer;
 
@@ -157,21 +168,16 @@ namespace nysy {
 				m_status = conn_stat;
 				if (m_status == nysy::ConnectionStatus::SystemError)return;
 
-				m_thread_pool.addTask(&HTTPServer::serve_client,this,connection,conn_addr);
-				
+				m_thread_pool.add_task(&HTTPServer::serve_client, this, connection, conn_addr);
+
 			}
 		}
 		~HTTPServer() {
 #ifdef _WIN64
-			if(is_wsa_startuped)WSACleanup();
+			if (is_wsa_startuped)WSACleanup();
 #endif
 		}
 	};
 	bool HTTPServer::is_wsa_startuped{false};
 }//namespace nysy
-
-int main()
-{
-	nysy::HTTPServer server{8086,32,32};
-	server.start();
-}
+#endif//_NYSY_HTTP_SERVER_
